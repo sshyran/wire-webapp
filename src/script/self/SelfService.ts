@@ -17,7 +17,7 @@
  *
  */
 
-import type {Consent, Self} from '@wireapp/api-client/src/self';
+import type {Consent, Self, QualifiedSelf} from '@wireapp/api-client/src/self';
 import type {UserUpdate} from '@wireapp/api-client/src/user';
 import type {TraceState} from '@wireapp/api-client/src/http';
 import {container} from 'tsyringe';
@@ -31,7 +31,7 @@ export class SelfService {
     return this.apiClient.self.api.deleteSelf({password});
   }
 
-  getSelf(traceStates: TraceState[]): Promise<Self> {
+  getSelf(traceStates: TraceState[]): Promise<Self | QualifiedSelf> {
     traceStates.push({position: 'SelfService.getSelf', vendor: 'webapp'});
     return this.apiClient.self.api.getSelf(traceStates);
   }

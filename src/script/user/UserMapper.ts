@@ -17,8 +17,8 @@
  *
  */
 
-import type {User as APIClientUser} from '@wireapp/api-client/src/user';
-import type {Self as APIClientSelf} from '@wireapp/api-client/src/self';
+import type {QualifiedUser as APIClientQualifiedUser} from '@wireapp/api-client/src/user';
+import type {Self as APIClientSelf, QualifiedSelf as APIClientQualifiedSelf} from '@wireapp/api-client/src/self';
 
 import {joaatHash} from 'Util/Crypto';
 import {Logger, getLogger} from 'Util/Logger';
@@ -41,16 +41,16 @@ export class UserMapper {
     this.serverTimeHandler = serverTimeHandler;
   }
 
-  mapUserFromJson(userData: APIClientUser | APIClientSelf): User {
+  mapUserFromJson(userData: APIClientQualifiedUser): User {
     return this.updateUserFromObject(new User(), userData);
   }
 
-  mapSelfUserFromJson(userData: APIClientSelf | APIClientUser): User {
+  mapSelfUserFromJson(userData: APIClientQualifiedSelf): User {
     const userEntity = this.updateUserFromObject(new User(), userData);
     userEntity.isMe = true;
 
-    if ((userData as APIClientSelf).locale) {
-      userEntity.locale = (userData as APIClientSelf).locale;
+    if ((userData).locale) {
+      userEntity.locale = (userData).locale;
     }
 
     return userEntity;
@@ -61,7 +61,7 @@ export class UserMapper {
    * @note Return an empty array in any case to prevent crashes.
    * @returns Mapped user entities
    */
-  mapUsersFromJson(usersData: (APIClientSelf | APIClientUser)[]): User[] {
+  mapUsersFromJson(usersData: Array<APIClientQualifiedUser>): User[] {
     if (usersData?.length) {
       return usersData.filter(userData => userData).map(userData => this.mapUserFromJson(userData));
     }
@@ -76,7 +76,7 @@ export class UserMapper {
    * @param userData Updated user data from backend
    * @todo Pass in "serverTimeHandler", so that it can be removed from the "UserMapper" constructor
    */
-  updateUserFromObject(userEntity: User, userData: Partial<APIClientUser | APIClientSelf>): User | undefined {
+  updateUserFromObject(userEntity: User, userData: Partial<APIClientQualifiedSelf>): User | undefined {
     if (!userData) {
       return undefined;
     }
@@ -97,6 +97,7 @@ export class UserMapper {
       accent_id: accentId,
       assets,
       deleted,
+      domain,
       email,
       expires_at: expirationDate,
       managed_by,
@@ -107,7 +108,7 @@ export class UserMapper {
       service,
       sso_id: ssoId,
       team: teamId,
-    } = userData as APIClientSelf;
+    } = userData;
 
     if (accentId) {
       userEntity.accent_id(accentId);
@@ -175,6 +176,10 @@ export class UserMapper {
 
     if (deleted) {
       userEntity.isDeleted = true;
+    }
+
+    if (domain) {
+      userEntity.domain = domain;
     }
 
     return userEntity;

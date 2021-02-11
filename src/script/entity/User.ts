@@ -80,6 +80,7 @@ export class User {
   public readonly providerName: ko.Observable<string>;
   public readonly teamRole: ko.Observable<TEAM_ROLE>;
   public readonly username: ko.Observable<string>;
+  public domain?: string;
   public serviceId?: string;
   public teamId?: string;
 
@@ -163,6 +164,7 @@ export class User {
     this.isTeamMember = ko.observable(false);
     this.teamRole = ko.observable(TEAM_ROLE.NONE);
     this.teamId = undefined;
+    this.domain = undefined;
 
     this.isRequest = ko.pureComputed(() => this.connection().isRequest());
 
