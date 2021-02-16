@@ -46,7 +46,7 @@ import 'Components/list/conversationListCell';
 import 'Components/list/GroupAvatar';
 import 'Components/message';
 import 'Components/messageQuote';
-import 'Components/messageTimerButton';
+import 'Components/MessageTimerButton';
 import 'Components/modal';
 import 'Components/panel/serviceDetails';
 import 'Components/panel/userDetails';
