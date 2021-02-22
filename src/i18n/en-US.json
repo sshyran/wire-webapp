@@ -913,7 +913,7 @@
   "searchTeamGroups": "Team conversations",
   "searchTeamMembers": "Team members",
   "searchTopPeople": "Top people",
-  "searchTrySearch": "Find people by\nname or username",
+  "searchTrySearch": "Find people in Wire by name or\n@username.\n\nFind people from another domain\nby @username@domainname.",
   "setEmail.button": "Set email",
   "setEmail.emailPlaceholder": "Email",
   "setEmail.headline": "Set email",
