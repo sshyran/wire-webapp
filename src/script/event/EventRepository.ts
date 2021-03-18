@@ -19,15 +19,13 @@
 
 import {Asset as ProtobufAsset} from '@wireapp/protocol-messaging';
 import {WebAppEvents} from '@wireapp/webapp-events';
-import {USER_EVENT} from '@wireapp/api-client/src/event';
-import {StatusCodes as HTTP_STATUS} from 'http-status-codes';
 import {amplify} from 'amplify';
 import ko from 'knockout';
-import {CONVERSATION_EVENT} from '@wireapp/api-client/src/event';
-import type {Notification} from '@wireapp/api-client/src/notification';
+import {CONVERSATION_EVENT, USER_EVENT} from '@wireapp/api-client/src/event';
+import type {Notification, NotificationList} from '@wireapp/api-client/src/notification';
 import {AbortHandler} from '@wireapp/api-client/src/tcp/';
 import {container} from 'tsyringe';
-
+import {AxiosError} from 'axios';
 import {getLogger, Logger} from 'Util/Logger';
 import {TIME_IN_MILLIS} from 'Util/TimeUtil';
 import {t} from 'Util/LocalizerUtil';
@@ -201,6 +199,7 @@ export class EventRepository {
       }
     }
   }
+
   /**
    * Get notifications for the current client from the stream.
    *
@@ -209,6 +208,14 @@ export class EventRepository {
    * @returns Resolves when all new notifications from the stream have been handled with the latest notification ID that has been processed
    */
   private async getNotifications(notificationId: string, abortHandler: AbortHandler): Promise<string> {
+    function isAxiosError(errorCandidate: any): errorCandidate is AxiosError {
+      return errorCandidate.isAxiosError === true;
+    }
+
+    function hasMissedNotifications(data: any): data is NotificationList {
+      return !!data.notifications;
+    }
+
     const processNotifications = async (notifications: Notification[], abortHandler: AbortHandler) => {
       if (notifications.length <= 0) {
         this.logger.info(`No notifications found since '${notificationId}'`);
@@ -243,22 +250,28 @@ export class EventRepository {
         notificationId,
       );
       return processNotifications(notificationList, abortHandler);
-    } catch (errorResponse) {
+    } catch (error) {
       // When asking for /notifications with a `since` set to a notification ID that the backend doesn't know of (because it does not belong to our client or it is older than the lifetime of the notification stream),
       // we will receive a HTTP 404 status code with a `notifications` payload
       // TODO: In the future we should ask the backend for the last known notification id (HTTP GET /notifications/{id}) instead of using the "errorResponse.notifications" payload
-      if (errorResponse.response?.notifications) {
-        this.triggerMissedSystemEventMessageRendering();
-        return processNotifications(errorResponse.response.notifications, abortHandler);
-      }
-
-      const isNotFound = errorResponse.response?.status === HTTP_STATUS.NOT_FOUND;
-      if (isNotFound) {
-        this.logger.info(`No notifications found since '${notificationId}'`, errorResponse);
+      if (isAxiosError(error)) {
+        if (hasMissedNotifications(error.response.data)) {
+          this.triggerMissedSystemEventMessageRendering();
+          const {has_more, notifications: missedNotifications} = error.response.data;
+          if (has_more) {
+            const furtherMissedNotifications = await this.notificationService.getAllNotificationsForClient(
+              this.currentClient().id,
+              missedNotifications[missedNotifications.length - 1].id,
+            );
+            missedNotifications.push(...furtherMissedNotifications);
+          }
+          return processNotifications(missedNotifications, abortHandler);
+        }
+        this.logger.info(`No notifications found since '${notificationId}'`, error);
         throw new EventError(EventError.TYPE.NO_NOTIFICATIONS, EventError.MESSAGE.NO_NOTIFICATIONS);
       }
 
-      this.logger.error(`Failed to get notifications: ${errorResponse.message}`, errorResponse);
+      this.logger.error(`Failed to get notifications: ${error.message}`, error);
       throw new EventError(EventError.TYPE.REQUEST_FAILURE, EventError.MESSAGE.REQUEST_FAILURE);
     }
   }
@@ -327,24 +340,22 @@ export class EventRepository {
    * @param isInitialization Set initial date to 0 if not found
    * @returns Resolves when stream state has been initialized
    */
-  private setStreamState(clientId: string, isInitialization = false) {
-    return this.notificationService.getNotificationsLast(clientId).then(
-      ({id: notificationId, payload}): Promise<(string | void)[]> => {
-        const [event] = payload;
-        const isoDateString = this.getIsoDateFromEvent(event as EventRecord, isInitialization) as string;
+  private setStreamState(clientId: string, isInitialization = false): Promise<(string | void)[] | undefined> {
+    return this.notificationService.getNotificationsLast(clientId).then(({id: notificationId, payload}) => {
+      const [event] = payload;
+      const isoDateString = this.getIsoDateFromEvent(event as EventRecord, isInitialization) as string;
 
-        if (notificationId) {
-          const logMessage = isoDateString
-            ? `Set starting point on notification stream to '${notificationId}' (isoDateString)`
-            : `Reset starting point on notification stream to '${notificationId}'`;
-          this.logger.info(logMessage);
+      if (notificationId) {
+        const logMessage = isoDateString
+          ? `Set starting point on notification stream to '${notificationId}' (isoDateString)`
+          : `Reset starting point on notification stream to '${notificationId}'`;
+        this.logger.info(logMessage);
 
-          return Promise.all([this.updateLastEventDate(isoDateString), this.updateLastNotificationId(notificationId)]);
-        }
+        return Promise.all([this.updateLastEventDate(isoDateString), this.updateLastNotificationId(notificationId)]);
+      }
 
-        return undefined;
-      },
-    );
+      return undefined;
+    });
   }
 
   private getIsoDateFromEvent(event: EventRecord, defaultValue = false): string | void {
@@ -777,7 +788,9 @@ export class EventRepository {
   }
 
   private throwValidationError(event: EventRecord, errorMessage: string, logMessage?: string): never {
-    const baseLogMessage = `Ignored '${event.type}' (${event.id}) in '${event.conversation}' from '${event.from}':'`;
+    const baseLogMessage = `Ignored '${event.type}' (${event.id || 'no ID'}) in '${event.conversation}' from '${
+      event.from
+    }':'`;
     const baseErrorMessage = 'Event validation failed:';
     this.logger.warn(`${baseLogMessage} ${logMessage || errorMessage}`, event);
     throw new EventError(EventError.TYPE.VALIDATION_FAILED, `${baseErrorMessage} ${errorMessage}`);

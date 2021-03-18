@@ -17,21 +17,26 @@
  *
  */
 
-import ko from 'knockout';
 import {CALL_TYPE, STATE as CALL_STATE} from '@wireapp/avs';
 import {createRandomUuid} from 'Util/util';
-
 import {instantiateComponent} from '../../../helper/knockoutHelpers';
 import {Call} from 'src/script/calling/Call';
 import {Participant} from 'src/script/calling/Participant';
 import {Conversation} from 'src/script/entity/Conversation';
 import 'src/script/components/list/conversationListCallingCell';
 import {User} from 'src/script/entity/User';
+import {DeviceTypes, MediaDevicesHandler} from 'src/script/media/MediaDevicesHandler';
+import ko from 'knockout';
 import type {Grid} from 'src/script/calling/videoGridHandler';
 
-function createCall(state: CALL_STATE, selfUser = new User(createRandomUuid())): Call {
-  const selfParticipant = new Participant(selfUser, createRandomUuid());
-  const call = new Call('', '', undefined, selfParticipant, CALL_TYPE.NORMAL);
+function createCall(state: CALL_STATE, selfUser = new User(createRandomUuid())) {
+  const selfParticipant = new Participant(selfUser, 'client-id');
+  const mediaDevicesHandler = {
+    currentAvailableDeviceId: {
+      [DeviceTypes.AUDIO_OUTPUT]: ko.pureComputed(() => 'test'),
+    },
+  } as MediaDevicesHandler;
+  const call = new Call('', '', 0, selfParticipant, CALL_TYPE.NORMAL, mediaDevicesHandler);
   call.state(state);
   return call;
 }
@@ -48,14 +53,20 @@ describe('conversationListCallingCell', () => {
       isExternal: () => false,
     };
     const conversation = new Conversation();
+    const mediaDevicesHandler = {
+      currentAvailableDeviceId: {
+        [DeviceTypes.AUDIO_OUTPUT]: ko.pureComputed(() => 'test'),
+      },
+    } as MediaDevicesHandler;
     conversation.participating_user_ets([new User('id')]);
     defaultParams = {
       call: new Call(
         '',
         '',
-        undefined,
-        new Participant(new User(createRandomUuid()), createRandomUuid()),
+        0,
+        new Participant(new User(createRandomUuid()), ''),
         CALL_TYPE.NORMAL,
+        mediaDevicesHandler,
       ),
       callActions: {},
       callingRepository: mockedCallingRepository,
